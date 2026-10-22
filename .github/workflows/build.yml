@@ -1,10 +1,10 @@
-name: Build AirPods Spatial Lab v0.3 APK
+name: Build AirPods Spatial Lab v0.5 APK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'AirPodsSpatialLab-v0.3.zip'
+      - 'AirPodsSpatialLab-v0.5.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -43,34 +43,34 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Extract v0.3 source
+      - name: Extract v0.5 source
         shell: bash
         run: |
           set -euo pipefail
-          test -f 'AirPodsSpatialLab-v0.3.zip'
+          test -f 'AirPodsSpatialLab-v0.5.zip'
           mkdir -p extracted
-          unzip -q 'AirPodsSpatialLab-v0.3.zip' -d extracted
-          test -f extracted/AirPodsSpatialLab-v0.3/app/build.gradle
+          unzip -q 'AirPodsSpatialLab-v0.5.zip' -d extracted
+          test -f extracted/AirPodsSpatialLab-v0.5/app/build.gradle
 
       - name: Build experimental APK
-        working-directory: extracted/AirPodsSpatialLab-v0.3
+        working-directory: extracted/AirPodsSpatialLab-v0.5
         shell: bash
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Prepare v0.3 APK
+      - name: Prepare v0.5 APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp extracted/AirPodsSpatialLab-v0.3/app/build/outputs/apk/debug/app-debug.apk \
-            output/AirPodsSpatialLab-v0.3-EXPERIMENTAL-debug.apk
+          cp extracted/AirPodsSpatialLab-v0.5/app/build/outputs/apk/debug/app-debug.apk \
+            output/AirPodsSpatialLab-v0.5-EXPERIMENTAL-debug.apk
           sha256sum output/*.apk
 
       - name: Upload APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AirPodsSpatialLab-v0.3-APK
-          path: output/AirPodsSpatialLab-v0.3-EXPERIMENTAL-debug.apk
+          name: AirPodsSpatialLab-v0.5-APK
+          path: output/AirPodsSpatialLab-v0.5-EXPERIMENTAL-debug.apk
           if-no-files-found: error
 
       - name: Publish APK to GitHub Releases
@@ -79,10 +79,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view 'v0.3-experimental' >/dev/null 2>&1; then
-            gh release upload 'v0.3-experimental' output/*.apk --clobber
+          if gh release view 'v0.5-experimental' >/dev/null 2>&1; then
+            gh release upload 'v0.5-experimental' output/*.apk --clobber
           else
-            gh release create 'v0.3-experimental' output/*.apk \
-              --title 'AirPods Spatial Lab v0.3 (experimental)' \
+            gh release create 'v0.5-experimental' output/*.apk \
+              --title 'AirPods Spatial Lab v0.5 (experimental)' \
               --notes 'Unverified root-free Bluetooth L2CAP head tracking experiment for AirPods 5. APK build success does not establish live head tracking. Lower volume before testing playback capture.'
           fi
