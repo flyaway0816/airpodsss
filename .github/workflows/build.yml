@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   android-apk:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - name: Checkout uploaded project
         uses: actions/checkout@v4
@@ -24,11 +24,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK command-line tools
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 36
-        run: sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+      # GitHub Ubuntu runners have Android SDK installed already.
+      # Skip android-actions/setup-android@v3, which failed in the first run.
+      - name: Use preinstalled Android SDK and install API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          TOOL="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$TOOL" ]]; then
+            echo "::error::Missing preinstalled sdkmanager: $TOOL"
+            exit 1
+          fi
+          "$TOOL" --version
+          "$TOOL" --install 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Install Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
@@ -36,38 +47,43 @@ jobs:
           gradle-version: '8.13'
 
       - name: Extract project
+        shell: bash
         run: |
+          set -euo pipefail
           test -f AirPodsSpatialLab_v0.2_AirPods5_Android_Project.zip
           mkdir -p extracted
           unzip -q AirPodsSpatialLab_v0.2_AirPods5_Android_Project.zip -d extracted
           test -f extracted/AirPodsSpatialLab_v0.2/app/build.gradle
 
-      - name: Build unsigned-test / debug-signed APK
+      - name: Build experimental debug APK
         working-directory: extracted/AirPodsSpatialLab_v0.2
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Prepare clearly labeled test APK
+      - name: Prepare APK
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p output
-          cp extracted/AirPodsSpatialLab_v0.2/app/build/outputs/apk/debug/app-debug.apk \
-            output/AirPodsSpatialLab-v0.2-EXPERIMENTAL-debug.apk
+          cp extracted/AirPodsSpatialLab_v0.2/app/build/outputs/apk/debug/app-debug.apk output/AirPodsSpatialLab-v0.2-EXPERIMENTAL-debug.apk
           sha256sum output/*.apk
 
-      - name: Upload APK to workflow results
+      - name: Upload APK to Actions artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AirPodsSpatialLab-experimental-APK
           path: output/*.apk
           if-no-files-found: error
 
-      - name: Publish direct APK download to GitHub Releases
+      - name: Publish test APK to Releases
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          if gh release view 'v0.2-experimental' >/dev/null 2>&1; then
+          if gh release view 'v0.2-experimental' > /dev/null 2>&1; then
             gh release upload 'v0.2-experimental' output/*.apk --clobber
           else
             gh release create 'v0.2-experimental' output/*.apk \
-              --title 'AirPods Spatial Lab v0.2 - experimental, unverified' \
-              --notes 'WARNING: No real AirPods 5 dynamic head tracking has been validated. This is a test build; audio capture replay can echo. No Root required for the app, but AACP sensor access may fail on Android 17.'
+              --title 'AirPods Spatial Lab v0.2 - experimental' \
+              --notes 'UNVERIFIED TEST APK. AirPods 5 real head tracking has not been demonstrated. Audio replay can echo; use low volume.'
           fi
